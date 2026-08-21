@@ -16,14 +16,32 @@
 
 ## 安装
 
-可使用conda或Python直接安装依赖并运行，本地使用 [uv](https://docs.astral.sh/uv/) 管理依赖，在本目录下执行一次：
+推荐 Python 3.11（3.9+ 均可），用标准的 `venv` + `pip` 即可，不依赖任何额外的包管理器：
+
+```bash
+cd GridVarEditor
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+# Linux / macOS
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+会安装好 `netCDF4`、`numpy`、`matplotlib`、`PyQt5`（锁定 5.15.11 + Qt5 5.15.2，避免解析到没有预编译包的新版本）、`cartopy`。
+
+如果更喜欢用 conda 管理环境，也可以 `conda create -n gridvareditor python=3.11` 后在该环境里执行同样的 `pip install -r requirements.txt`。
+
+也可以选用 [uv](https://docs.astral.sh/uv/)（更快，且带锁定版本的 `uv.lock`），效果等价，在本目录下执行一次：
 
 ```bash
 cd GridVarEditor
 uv sync
 ```
 
-会自动创建 `.venv` 并安装好 `netCDF4`、`numpy`、`matplotlib`、`PyQt5`（锁定 5.15.11 + Qt5 5.15.2，避免解析到没有 Windows 预编译包的新版本）、`cartopy`。`.python-version` 固定使用 Python 3.11。`uv.lock` 中已包含 Linux（manylinux）平台的预编译包，同一份锁文件在 Windows/Linux/macOS 下都可以直接 `uv sync`。
+`.python-version` 固定使用 Python 3.11，`uv.lock` 中已包含 Linux（manylinux）平台的预编译包，同一份锁文件在 Windows/Linux/macOS 下都可以直接 `uv sync`。
 
 ### Linux 环境
 
@@ -51,41 +69,45 @@ sudo dnf install -y \
     geos-devel proj-devel proj-data
 ```
 
-也可以直接运行 `scripts/setup_linux.sh`，自动识别 `apt`/`dnf` 并完成系统依赖安装 + `uv sync`：
+也可以直接运行 `scripts/setup_linux.sh`，自动识别 `apt`/`dnf` 安装好系统依赖，再用 `venv` + `pip` 装好 Python 依赖（检测到 `uv` 时也可选用它代替）：
 
 ```bash
 cd GridVarEditor
 bash scripts/setup_linux.sh
 ```
 
-系统依赖装好后，安装 Python 依赖并运行的方式与其他平台一致：
+系统依赖装好后，安装 Python 依赖并运行的方式与其他平台一致（`venv` + `pip`，或替换成 `uv sync` / `uv run`）：
 
 ```bash
 cd GridVarEditor
-uv sync
-uv run GridVarEditor.py --dir ../work
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python GridVarEditor.py --dir ../work
 ```
 
 远程服务器/SSH 场景下需要显示窗口，本工具是本地 GUI 程序，需要一个可用的图形显示环境，可选：
 
 - 通过 `ssh -X`/`ssh -Y` 转发 X11 后在远程执行（网络延迟大时体验较差）；
 - 或用 VNC/NoMachine 等远程桌面方案，在远程图形会话中运行；
-- 纯无显示环境（如 CI）无法运行本工具（PyQt5 GUI 依赖真实或虚拟显示，若只需验证依赖能否装好/程序能否导入，可用 `xvfb-run uv run GridVarEditor.py` 配合 `Xvfb` 虚拟显示）。
+- 纯无显示环境（如 CI）无法运行本工具（PyQt5 GUI 依赖真实或虚拟显示，若只需验证依赖能否装好/程序能否导入，可用 `xvfb-run python GridVarEditor.py` 配合 `Xvfb` 虚拟显示）。
 
 ## 使用
 
+先激活虚拟环境（`source .venv/bin/activate` 或 Windows 下 `.venv\Scripts\activate`），再用 `python` 运行（用 uv 管理环境的话把下面的 `python GridVarEditor.py` 换成 `uv run GridVarEditor.py` 即可，无需手动激活）：
+
 ```bash
 # 打开单个文件
-uv run GridVarEditor.py ../work/gridkmt_PIdefault_260804.nc
+python GridVarEditor.py ../work/gridkmt_PIdefault_260804.nc
 
 # 一次打开多个文件
-uv run GridVarEditor.py ../work/*.nc
+python GridVarEditor.py ../work/*.nc
 
 # 打开整个目录下的所有 .nc 文件
-uv run GridVarEditor.py --dir ../work
+python GridVarEditor.py --dir ../work
 
 # 不带参数启动，之后用 File > Open 打开
-uv run GridVarEditor.py
+python GridVarEditor.py
 ```
 
 命令行参数：
@@ -120,9 +142,10 @@ uv run GridVarEditor.py
 ```text
 GridVarEditor/
 ├── README.md              # 本文件
-├── pyproject.toml          # uv 依赖声明
-├── uv.lock                 # 锁定的依赖版本
-├── .python-version         # 固定 Python 3.11
+├── requirements.txt        # pip 依赖声明（venv + pip 安装方式）
+├── pyproject.toml          # uv 依赖声明（可选的 uv 安装方式）
+├── uv.lock                 # uv 锁定的依赖版本（可选）
+├── .python-version         # 固定 Python 3.11（供 uv 使用）
 ├── GridVarEditor.py        # 主程序（GUI + 交互 + 数据模型）
 ├── gridio.py                # 与 NetCDF/POP 网格相关的无状态工具函数
 ├── resources/

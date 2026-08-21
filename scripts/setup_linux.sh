@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 一次性安装 GridVarEditor 在 Linux 上运行所需的系统依赖（Qt xcb 平台插件、GEOS/PROJ），
-# 然后用 uv 同步 Python 依赖。支持 Debian/Ubuntu (apt) 和 RHEL/CentOS/Fedora (dnf)。
+# 然后安装 Python 依赖：有 uv 就用 uv sync，否则退回 venv + pip。
+# 支持 Debian/Ubuntu (apt) 和 RHEL/CentOS/Fedora (dnf)。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -24,10 +25,13 @@ else
     exit 1
 fi
 
-if ! command -v uv >/dev/null 2>&1; then
-    echo "未找到 uv，请先安装：curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
-    exit 1
+if command -v uv >/dev/null 2>&1; then
+    uv sync
+    echo "完成（使用 uv）。运行示例：uv run GridVarEditor.py --dir ../work"
+else
+    python3 -m venv .venv
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    echo "完成（使用 venv + pip）。运行示例：source .venv/bin/activate && python GridVarEditor.py --dir ../work"
 fi
-
-uv sync
-echo "完成。运行示例：uv run GridVarEditor.py --dir ../work"
