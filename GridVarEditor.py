@@ -46,11 +46,12 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QComboBox,
     QPushButton, QCheckBox, QFormLayout, QVBoxLayout, QHBoxLayout,
     QGroupBox, QSplitter, QMessageBox, QFileDialog, QAction, QShortcut,
-    QListWidget, QListWidgetItem,
+    QListWidget, QListWidgetItem, QScrollArea,
 )
 from PyQt5.QtGui import QKeySequence
 
 import gridio
+from gridview import MapPreview
 
 DEFAULT_MASKABLE_CMAP = "tab20"
 DEFAULT_CONTINUOUS_CMAP = "viridis"
@@ -410,6 +411,14 @@ class GridVarEditor(QMainWindow):
         # is handled directly by middle-mouse-drag in on_press/on_motion.
         self.toolbar = MapToolbar(self.canvas, canvas_widget)
 
+        self.aspect_combo = QComboBox()
+        self.aspect_combo.addItems(["铺满窗口（比例可变）", "方格网格", "近似物理比例"])
+        self.aspect_combo.setToolTip("编辑视图使用行列索引；经纬度地图请用地图预览。显示比例不改变网格数据。")
+        self.aspect_combo.currentIndexChanged.connect(self.apply_display_aspect)
+        self.toolbar.addWidget(self.aspect_combo)
+        preview_action = self.toolbar.addAction("地图预览 / 导出")
+        preview_action.triggered.connect(self.open_map_preview)
+
         canvas_layout.addWidget(self.toolbar)
         canvas_layout.addWidget(self.canvas)
         splitter.addWidget(canvas_widget)
@@ -426,8 +435,7 @@ class GridVarEditor(QMainWindow):
 
         # --- sidebar ------------------------------------------------------
         sidebar = QWidget()
-        sidebar.setMinimumWidth(340)
-        sidebar.setMaximumWidth(420)
+        sidebar.setMinimumWidth(300)
         side = QVBoxLayout(sidebar)
 
         # Open files
@@ -554,9 +562,15 @@ class GridVarEditor(QMainWindow):
         side.addWidget(disp_box)
 
         side.addStretch(1)
-        splitter.addWidget(sidebar)
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setWidget(sidebar)
+        self.sidebar_scroll.setMinimumWidth(320)
+        self.sidebar_scroll.setMaximumWidth(420)
+        splitter.addWidget(self.sidebar_scroll)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
+        splitter.setSizes([960, 340])
 
         self.setCentralWidget(splitter)
         self.create_menu()
@@ -591,6 +605,11 @@ class GridVarEditor(QMainWindow):
         edit_menu.addAction(redo_action)
 
         view_menu = self.menuBar().addMenu("&View")
+        self.sidebar_action = QAction("显示控制栏", self, checkable=True, checked=True,
+                                      shortcut="Ctrl+B")
+        self.sidebar_action.toggled.connect(self.sidebar_scroll.setVisible)
+        view_menu.addAction(self.sidebar_action)
+        self.toolbar.addAction(self.sidebar_action)
         reset_action = QAction("Reset &Zoom", self, shortcut="Ctrl+0")
         reset_action.triggered.connect(self.reset_view)
         view_menu.addAction(reset_action)
@@ -654,7 +673,10 @@ class GridVarEditor(QMainWindow):
         self.axes.set_ylim(self.dc.ny - 0.5, -0.5)
         # Physical aspect ratio (north-south / east-west) so the map looks
         # like a real map instead of squishing every grid cell into a square.
-        self.axes.set_aspect(self.dc.aspect, adjustable='box')
+        self.apply_display_aspect()
+        self.axes.set_xlabel('Column index (j)')
+        self.axes.set_ylabel('Row index (i)')
+        self.fig.subplots_adjust(left=0.075, right=0.94, top=0.97, bottom=0.085)
         self.colorbar_obj = self.fig.colorbar(self.im, ax=self.axes, fraction=0.046, pad=0.02)
         self.fig.tight_layout()
 
@@ -695,6 +717,31 @@ class GridVarEditor(QMainWindow):
         return vmin, vmax
 
     # --------------------------------------------------------------- render
+    def apply_display_aspect(self, *_):
+        if not hasattr(self, 'dc'):
+            return
+        aspect = ('auto', 1.0, self.dc.aspect)[self.aspect_combo.currentIndex()]
+        self.axes.set_aspect(aspect, adjustable='box')
+        self.canvas.draw_idle()
+
+    def open_map_preview(self):
+        if not hasattr(self, 'dc'):
+            self.statusBar().showMessage('请先打开网格文件', 5000)
+            return
+        if getattr(self, 'map_preview', None) is not None:
+            self.map_preview.close()
+            self.map_preview.deleteLater()
+            self.map_preview = None
+        try:
+            self.map_preview = MapPreview(self.dc.lons, self.dc.lats, self.dc.data,
+                                          self.dc.varname, self.dc.units,
+                                          self._current_cmap(), self.dc.is_maskable,
+                                          os.path.basename(self.dc.fname), self)
+        except ValueError as error:
+            QMessageBox.warning(self, '无法预览地图', str(error))
+            return
+        self.map_preview.show()
+
     def refresh_image(self):
         self.im.set_data(self.dc.displayArray())
         self.im.set_cmap(self._current_cmap())
